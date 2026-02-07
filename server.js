@@ -47,7 +47,9 @@ wss.on('connection', ws => {
             // Check winner
             const winnerSymbol = checkWinner(room.board);
             if(winnerSymbol) {
-                const winnerPlayer = room.players.find(p => (room.players.indexOf(p) === 0 ? "X" : "O") === winnerSymbol);
+                // Determine winner's name
+                const winnerIndex = winnerSymbol === "X" ? 0 : 1;
+                const winnerPlayer = room.players[winnerIndex];
                 const winnerName = winnerPlayer ? winnerPlayer.name : "Unknown";
 
                 // Notify all players
@@ -80,16 +82,14 @@ function checkWinner(b) {
     return null;
 }
 
-
-const fetch = require("node-fetch");
-
+// Function to update winner's coins in Adalo
 function sendResultToAdalo(winner) {
     const coinsToAdd = 10; // Coins to add
 
-    // 1️⃣ URL encode the filter JSON
+    // URL encode the filter JSON
     const filter = encodeURIComponent(JSON.stringify({ "Full Name": winner }));
 
-    // 2️⃣ Get the winner's record
+    // Get winner's record from Adalo
     fetch(`${adaloAPI}?collection_id=${collectionID}&filter=${filter}`, {
         headers: { "Authorization": `Bearer ${apiKey}` }
     })
@@ -99,7 +99,7 @@ function sendResultToAdalo(winner) {
             const userID = data.records[0].id;
             const currentCoins = data.records[0].Coins || 0;
 
-            // 3️⃣ PATCH the correct record
+            // PATCH the record to update coins
             fetch(`${adaloAPI}/${userID}`, {
                 method: "PATCH",
                 headers: {
@@ -121,4 +121,4 @@ function sendResultToAdalo(winner) {
     .catch(err => console.error("Error fetching winner record:", err));
 }
 
-
+console.log("WebSocket server running on ws://localhost:8080");
