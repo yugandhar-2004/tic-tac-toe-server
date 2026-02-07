@@ -122,6 +122,3 @@ function sendResultToAdalo(winner) {
 }
 
 
-console.log("WebSocket server running on ws://localhost:8080");
-
-
