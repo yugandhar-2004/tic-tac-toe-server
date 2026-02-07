@@ -5,8 +5,8 @@ const fetch = require('node-fetch');
 const wss = new WebSocket.Server({ port: 8080 });
 
 const adaloAPI = "https://api.adalo.com/v1/records";
-const collectionID = "PASTE_YOUR_COLLECTION_ID";
-const apiKey = "PASTE_YOUR_API_KEY";
+const collectionID = "t_33807262f91a45988d3128c8aeead12e";
+const apiKey = "4k7rz5dia60rov7bi4ncnyrgd";
 
 let rooms = {}; // store rooms and moves
 
@@ -81,3 +81,4 @@ function sendResultToAdalo(player1, player2, winner, roomID){
 }
 
 console.log("WebSocket server running on ws://localhost:8080");
+
