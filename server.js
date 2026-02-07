@@ -79,21 +79,28 @@ function checkWinner(b) {
     }
     return null;
 }
+
+
+const fetch = require("node-fetch");
+
 function sendResultToAdalo(winner) {
     const coinsToAdd = 10; // Coins to add
 
-    // 1️⃣ Find winner in Adalo
-    fetch(`${adaloAPI}?collection_id=${collectionID}&filter={"Full Name":"${winner}"}`, {
+    // 1️⃣ URL encode the filter JSON
+    const filter = encodeURIComponent(JSON.stringify({ "Full Name": winner }));
+
+    // 2️⃣ Get the winner's record
+    fetch(`${adaloAPI}?collection_id=${collectionID}&filter=${filter}`, {
         headers: { "Authorization": `Bearer ${apiKey}` }
     })
     .then(res => res.json())
     .then(data => {
-        if(data && data.records && data.records.length > 0) {
+        if (data && data.records && data.records.length > 0) {
             const userID = data.records[0].id;
             const currentCoins = data.records[0].Coins || 0;
 
-            // 2️⃣ Update Coins using correct URL and body
-            fetch(`${adaloAPI}/${userID}`, { // PATCH to /records/{record_id}
+            // 3️⃣ PATCH the correct record
+            fetch(`${adaloAPI}/${userID}`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
@@ -116,4 +123,5 @@ function sendResultToAdalo(winner) {
 
 
 console.log("WebSocket server running on ws://localhost:8080");
+
 
