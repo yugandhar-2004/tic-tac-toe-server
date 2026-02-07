@@ -1,113 +1,83 @@
-// Install: npm install ws node-fetch
-const WebSocket = require("ws");
-const fetch = require("node-fetch");
+// server.js
+const WebSocket = require('ws');
+const fetch = require('node-fetch');
 
-// Adalo API Key
-const ADALO_API_KEY = process.env.ADALO_API_KEY || "PASTE_YOUR_API_KEY_HERE";
+const wss = new WebSocket.Server({ port: 8080 });
 
-// Start WebSocket Server
-const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
+const adaloAPI = "https://api.adalo.com/v1/records";
+const collectionID = "PASTE_YOUR_COLLECTION_ID";
+const apiKey = "PASTE_YOUR_API_KEY";
 
-let rooms = []; // Each room = {id, players: [ws1, ws2], board: ["","","",...]} 
+let rooms = {}; // store rooms and moves
 
-wss.on("connection", (ws) => {
-  
-  ws.on("message", async (msg) => {
-    const data = JSON.parse(msg);
+wss.on('connection', ws => {
+    ws.on('message', message => {
+        const data = JSON.parse(message);
+        const { type, roomID, player, move } = data;
 
-    // ----- Player joins -----
-    if (data.type === "join") {
-      ws.userId = data.userId;
-      ws.name = data.name;
+        if(type === "join") {
+            if(!rooms[roomID]) rooms[roomID] = { players: [], board: ["","","","","","","","",""], currentPlayer: "X" };
+            rooms[roomID].players.push({ name: player, ws });
+            ws.send(JSON.stringify({ type: "joined", symbol: rooms[roomID].players.length === 1 ? "X" : "O" }));
+        }
 
-      let room = rooms.find(r => r.players.length === 1); // find waiting room
+        if(type === "move") {
+            const room = rooms[roomID];
+            if(!room || room.board[move] !== "") return;
 
-      if (!room) {
-        room = { id: Date.now(), players: [ws], board: Array(9).fill("") };
-        rooms.push(room);
-        ws.room = room;
-        ws.send(JSON.stringify({ type: "waiting", msg: "Waiting for opponent..." }));
-      } else {
-        room.players.push(ws);
-        ws.room = room;
+            room.board[move] = room.currentPlayer;
+            room.currentPlayer = room.currentPlayer === "X" ? "O" : "X";
 
-        // Assign symbols
-        room.players[0].symbol = "X";
-        room.players[1].symbol = "O";
+            // Broadcast updated board to all players
+            room.players.forEach(p => p.ws.send(JSON.stringify({ type: "update", board: room.board, currentPlayer: room.currentPlayer })));
 
-        // Notify both players
-        room.players.forEach(p => {
-          p.send(JSON.stringify({ type: "start", symbol: p.symbol }));
-        });
-      }
-    }
+            // Check winner
+            const winner = checkWinner(room.board);
+            if(winner) {
+                const winnerName = room.players.find(p => p.ws.symbol === winner).name || "Unknown";
+                room.players.forEach(p => p.ws.send(JSON.stringify({ type: "end", winner: winnerName })));
 
-    // ----- Player move -----
-    if (data.type === "move") {
-      const room = ws.room;
-      if (!room) return;
+                // Send result to Adalo automatically
+                sendResultToAdalo(room.players[0].name, room.players[1].name, winnerName, roomID);
 
-      room.board[data.index] = ws.symbol;
-
-      // Broadcast move
-      room.players.forEach(p => {
-        p.send(JSON.stringify({ type: "update", index: data.index, symbol: ws.symbol }));
-      });
-
-      // Check winner
-      const winner = checkWinner(room.board);
-      if (winner) {
-        room.players.forEach(p => {
-          p.send(JSON.stringify({ type: "winner", winnerSymbol: winner }));
-        });
-
-        // Add coins
-        const winnerPlayer = room.players.find(p => p.symbol === winner);
-        if (winnerPlayer) addCoinsToAdalo(winnerPlayer.userId, 10);
-      }
-    }
-
-  });
-
-  ws.on("close", () => {
-    if (ws.room) {
-      ws.room.players = ws.room.players.filter(p => p !== ws);
-      if (ws.room.players.length === 0) {
-        rooms = rooms.filter(r => r !== ws.room);
-      }
-    }
-  });
-
+                // Clear room
+                delete rooms[roomID];
+            }
+        }
+    });
 });
 
-// ----- Check winner -----
-function checkWinner(board) {
-  const lines = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6]
-  ];
-  for (const [a,b,c] of lines) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
-  }
-  return null;
+function checkWinner(b) {
+    const winConditions = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ];
+    for(let cond of winConditions){
+        const [a,b1,c] = cond;
+        if(b[a] && b[a]===b[b1] && b[a]===b[c]) return b[a];
+    }
+    return null;
 }
 
-// ----- Add coins to Adalo -----
-async function addCoinsToAdalo(userId, amount) {
-  try {
-    const url = `https://api.adalo.com/db/users/${userId}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${ADALO_API_KEY}` } });
-    const user = await res.json();
-    const currentCoins = user.Coins || 0;
-
-    await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ADALO_API_KEY}` },
-      body: JSON.stringify({ Coins: currentCoins + amount })
-    });
-    console.log(`Added ${amount} coins to user ${userId}`);
-  } catch (err) {
-    console.error("Error adding coins:", err);
-  }
+function sendResultToAdalo(player1, player2, winner, roomID){
+    const data = {
+        collection_id: collectionID,
+        record: {
+            Player1: player1,
+            Player2: player2,
+            Winner: winner,
+            RoomID: roomID
+        }
+    };
+    fetch(adaloAPI, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(data)
+    }).then(res => res.json()).then(res => console.log("Adalo updated", res)).catch(err=>console.error(err));
 }
+
+console.log("WebSocket server running on ws://localhost:8080");

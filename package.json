@@ -1,12 +1,12 @@
 {
-  "name": "tic-tac-toe-server",
+  "name": "tictactoe-server",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.14.0",
-    "node-fetch": "^3.3.2"
+    "ws": "^8.13.0",
+    "node-fetch": "^2.6.7"
   }
 }
