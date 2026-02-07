@@ -79,8 +79,6 @@ function checkWinner(b) {
     }
     return null;
 }
-
-// Function to update winner's coins in Adalo
 function sendResultToAdalo(winner) {
     const coinsToAdd = 10; // Coins to add
 
@@ -94,24 +92,21 @@ function sendResultToAdalo(winner) {
             const userID = data.records[0].id;
             const currentCoins = data.records[0].Coins || 0;
 
-            // 2️⃣ Update Coins
-            fetch(adaloAPI, {
+            // 2️⃣ Update Coins using correct URL and body
+            fetch(`${adaloAPI}/${userID}`, { // PATCH to /records/{record_id}
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    collection_id: collectionID,
-                    record: {
-                        id: userID,
-                        Coins: currentCoins + coinsToAdd
-                    }
+                    Coins: currentCoins + coinsToAdd
                 })
             })
             .then(res => res.json())
             .then(res => console.log(`Coins updated for ${winner}:`, res))
             .catch(err => console.error("Error updating coins:", err));
+
         } else {
             console.error(`Winner ${winner} not found in database`);
         }
@@ -119,4 +114,6 @@ function sendResultToAdalo(winner) {
     .catch(err => console.error("Error fetching winner record:", err));
 }
 
+
 console.log("WebSocket server running on ws://localhost:8080");
+
